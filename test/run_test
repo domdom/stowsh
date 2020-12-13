@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+test_name=$1
+test_dir=$(dirname "$test_name")
+test_expect=${test_name}.expect
+
+root_dir=${test_dir}/..
+
+build_dir=${root_dir}/build/$(basename "$test_name")
+src=$build_dir/src
+tgt=$build_dir/tgt
+
+rm -rf "$build_dir"
+mkdir -p $src
+mkdir -p $tgt
+
+stow=${root_dir}/d
+# Creates the source, and runs stow
+source "$test_name"
+
+(
+    cd $tgt
+    find . -not -type d -printf "%h/%f %l\n"
+) > "$build_dir/actual"
+
+diff "$build_dir/actual" "$test_name.expect"

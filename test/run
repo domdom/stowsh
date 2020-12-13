@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+BASEDIR=$(dirname "$0")
+
+export PATH=$BASEDIR/lib/bats-core/bin:$BASEDIR/../bin:$PATH
+
+bats $BASEDIR/*/*.bats "$@"
