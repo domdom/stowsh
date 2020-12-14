@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 setup_file () {
-    pushd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+    pushd "$( cd "$( dirname "$BATS_TEST_FILENAME" )" >/dev/null 2>&1 && pwd )"
 }
 
 teardown_file () {

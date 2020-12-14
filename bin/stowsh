@@ -168,9 +168,6 @@ check_mk_link() {
 
     local target_dir=$(dirname "$target_file")
 
-    [ -d "$target_dir" ] || error "mk_link: $target_dir is not a directory"
-    [ -d "$target_file" ] && error "mk_link: $target_file is must not be a directory"
-
     # If the source_file and target_file are the same, we have nothing to do
     [ "$target_file" -ef "$target_dir/$source_file" ] && return 0
 
