@@ -1,34 +1,33 @@
 #!/usr/bin/env bash
 
-load ../lib/test_helpers
+load ../test_helpers
 
-load ../lib/bats-support/load
-load ../lib/bats-assert/load
+load ../../lib/bats-support/load
+load ../../lib/bats-assert/load
 
 setup() {
-    mkdir -p "$BATS_TEST_DIRNAME/dest"
-    mkdir -p "$BATS_TEST_DIRNAME/empty"
+    mkdir -p dest
+    mkdir -p empty
 }
 
 teardown () {
-    rm -rf "$BATS_TEST_DIRNAME/dest"
-    rm -rf "$BATS_TEST_DIRNAME/empty"
+    rm -rf dest
+    rmdir empty
 }
 
 @test "simple stow" {
-    run stowsh stow "$BATS_TEST_DIRNAME/pkg" "$BATS_TEST_DIRNAME/dest"
+    run stowsh stow "pkg" "dest"
 
-    run diff -r --no-dereference "$BATS_TEST_DIRNAME/expected" "$BATS_TEST_DIRNAME/dest"
+    run diff -r --no-dereference "expected" "dest"
 
-    refute_output
+    assert_output
 }
 
 @test "simple unstow" {
-    run stowsh stow "$BATS_TEST_DIRNAME/pkg" "$BATS_TEST_DIRNAME/dest"
+    run stowsh stow "pkg" "dest"
+    run stowsh unstow "pkg" "dest"
 
-    run stowsh unstow "$BATS_TEST_DIRNAME/pkg" "$BATS_TEST_DIRNAME/dest"
-
-    run diff -r --no-dereference "$BATS_TEST_DIRNAME/empty" "$BATS_TEST_DIRNAME/dest"
+    run diff -r --no-dereference "empty" "dest"
 
     refute_output
 }

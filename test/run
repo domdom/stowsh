@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-BASEDIR=$(dirname "$0")
+BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-export PATH=$BASEDIR/lib/bats-core/bin:$BASEDIR/../bin:$PATH
+cd $BASEDIR
 
-bats $BASEDIR/*/*.bats "$@"
+export PATH=$BASEDIR/../lib/bats-core/bin:$BASEDIR/../bin:$PATH
+
+bats -r . "${@}"
