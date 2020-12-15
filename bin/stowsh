@@ -4,7 +4,7 @@ set -e
 BASEDIR=$(dirname "$0")
 
 # Do we rename paths that start with dot- to .?
-OPTION_DOT_RENAME=yes
+OPTION_DOT_RENAME=no
 
 # Add a . to all top-level items
 OPTION_DOT_PREFIX=no
@@ -15,7 +15,6 @@ OPTION_DOT_PREFIX=no
 # 2 - verbose - checks too
 # 3 - everything - ??
 OPTION_VERBOSE_LEVEL=1
-
 
 # dryrun - print what we are doing, don't actually do anything
 OPTION_DRYRUN=no
@@ -65,9 +64,7 @@ from_list () {
 # TODO: This is a compatibility hack for macos (which doesn't have realpath
 # --relative-to), find a pure bash way?
 relpath () {
-    local src=$(realpath "$1")
-    local tgt=$(realpath "$2")
-    python -c 'import os, sys; print(os.path.relpath(*sys.argv[1:]))' "$src" "$tgt"
+    python -c 'import os, sys; print(os.path.relpath(*sys.argv[1:]))' "$1" "$2"
 }
 
 
@@ -105,7 +102,7 @@ error () {
 #######################################################
 
 list_files () {
-    find $1 -name \* -type f -print0 | from_list
+    find $1 -name \* -not -type d -print0 | from_list
 }
 
 get_mapping () {
@@ -119,12 +116,20 @@ get_mapping () {
     local source_file=${3#"$source/"}
     local target_file="/$source_file"
 
-    if [ "$OPTION_DOTFILES" = yes ]; then
+    if [ "$OPTION_DOT_RENAME" = yes ]; then
         # Replace all occurances of '/dot-' with '/.'
         target_file=${target_file//\/dot-//.}
     fi
 
-    # remove 
+    if [ "$OPTION_DOT_PREFIX" = yes ]; then
+        # If the target file already starts with a dot, then we shouldn't add
+        # another.
+        target_file=${target_file#/}
+        if [[ "$target_file" != .* ]]; then
+            target_file="/.$target_file"
+        fi
+    fi
+
     target_file="$target$target_file"
     source_file="$source/$source_file"
 
@@ -169,7 +174,7 @@ check_mk_link() {
     local target_dir=$(dirname "$target_file")
 
     # If the source_file and target_file are the same, we have nothing to do
-    [ "$target_file" -ef "$target_dir/$source_file" ] && return 0
+    [ "$target_file" -ef "$source_file" ] && return 0
 
     # If the source_file and target_file are the same, we have nothing to do
     [ -f "$target_file" ] && error "mk_link: $target_file already exists"
@@ -201,9 +206,13 @@ action_mk_dir () {
 action_mk_link () {
     local target_file=$1
     local source_file=$2
-    [[ "$target_file" -ef "$source_file" ]] || ln -s "$source_file" "$target_file"
 
-    log 1 "[ln -s] $target_file -> $source_file"
+    local target_dir=$(dirname "$target_file")
+    local relative_source_file=$(relpath "$source_file" "$target_dir")
+
+    [[ "$target_file" -ef "$source_file" ]] || ln -s "$relative_source_file" "$target_file"
+
+    log 1 "[ln -s] $target_file -> $relative_source_file"
 }
 # Action to remove symlink
 action_rm_link () {
@@ -253,13 +262,9 @@ operation_stow () {
     local target_file=$3
     local source_file=$4
 
-    local target_dir=$(dirname "$target_file")
-
-    unmap mk_dir "$target" "$target_dir"
-
-    local relative_source_file=$(relpath "$source_file" "$target_dir")
-
-    unmap mk_link "$target_file" "$relative_source_file"
+    local target_file_dir=$(dirname "$target_file")
+    unmap mk_dir "$target" "$target_file_dir"
+    unmap mk_link "$target_file" "$source_file"
 }
 
 # Converts each target -> source pair into a list of actions to perform

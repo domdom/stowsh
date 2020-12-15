@@ -6,55 +6,68 @@ load ../../lib/bats-support/load
 load ../../lib/bats-assert/load
 
 setup() {
-    mkdir -p dest
+    dest="dest-$BATS_TEST_NUMBER"
+    mkdir -p $dest
     mkdir -p empty
 }
 
 teardown () {
-    rm -rf dest
+    rm -rf $dest
     rmdir empty
-    :
+    unset dest
 }
 
-@test "simple stow" {
-    run stowsh stow "pkg" "dest"
+@test "single file" {
+    run stowsh stow "pkg" "$dest"
     assert_success
 
-    run diff -r --no-dereference "expected" "dest"
-    assert_success
-}
-
-@test "simple unstow" {
-    run stowsh stow "pkg" "dest"
+    run diff -r --no-dereference "expected" "$dest"
     assert_success
 
-    run diff -r --no-dereference "expected" "dest"
+    run stowsh unstow "pkg" "$dest"
     assert_success
-
-    run stowsh unstow "pkg" "dest"
-    assert_success
-    run diff -r --no-dereference "empty" "dest"
+    run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
 
-@test "nested stow" {
-    run stowsh stow "pkg-nested" "dest"
+@test "single file in directory" {
+    run stowsh stow "pkg-nested" "$dest"
     assert_success
 
-    run diff -r --no-dereference "expected-nested" "dest"
+    run diff -r --no-dereference "expected-nested" "$dest"
+    assert_success
+
+    run stowsh unstow "pkg-nested" "$dest"
+    assert_success
+
+    run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
 
-@test "nested unstow" {
-    run stowsh stow "pkg-nested" "dest"
+@test "folder and file with . prefix" {
+    run stowsh stow "pkg-dots" "$dest"
     assert_success
 
-    run diff -r --no-dereference "expected-nested" "dest"
+    run diff -r --no-dereference "expected-dots" "$dest"
     assert_success
 
-    run stowsh unstow "pkg-nested" "dest"
+    run stowsh unstow "pkg-dots" "$dest"
     assert_success
 
-    run diff -r --no-dereference "empty" "dest"
+    run diff -r --no-dereference "empty" "$dest"
+    assert_success
+}
+
+@test "file and symbolic link" {
+    run stowsh stow "pkg-symlink" "$dest"
+    assert_success
+
+    run diff -r --no-dereference "expected-symlink" "$dest"
+    assert_success
+
+    run stowsh unstow "pkg-symlink" "$dest"
+    assert_success
+
+    run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
