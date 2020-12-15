@@ -102,7 +102,7 @@ error () {
 #######################################################
 
 list_files () {
-    find $1 -name \* -not -type d -print0 | from_list
+    find "$1" -name \* -not -type d -print0 | from_list
 }
 
 get_mapping () {
