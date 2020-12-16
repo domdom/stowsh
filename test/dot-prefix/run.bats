@@ -17,7 +17,7 @@ teardown () {
     unset dest
 }
 
-@test "single file" {
+@test "dot-prefix disabled" {
     run stowsh -t "$dest" "pkg"
     assert_success
 
@@ -26,46 +26,33 @@ teardown () {
 
     run stowsh -D -t "$dest" "pkg"
     assert_success
-    run diff -r --no-dereference "empty" "$dest"
-    assert_success
-}
-
-@test "single file in directory" {
-    run stowsh -t "$dest" "pkg-nested"
-    assert_success
-
-    run diff -r --no-dereference "expected-nested" "$dest"
-    assert_success
-
-    run stowsh -D -t "$dest" "pkg-nested"
-    assert_success
 
     run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
 
-@test "folder and file with . prefix" {
-    run stowsh -t "$dest" "pkg-dots"
+@test "dot-prefix enabled" {
+    run stowsh --dot-prefix -t "$dest" "pkg"
     assert_success
 
-    run diff -r --no-dereference "expected-dots" "$dest"
+    run diff -r --no-dereference "expected-on" "$dest"
     assert_success
 
-    run stowsh -D -t "$dest" "pkg-dots"
+    run stowsh --dot-prefix -D -t "$dest" "pkg"
     assert_success
 
     run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
 
-@test "file and symbolic link" {
-    run stowsh -t "$dest" "pkg-symlink"
+@test "both enabled" {
+    run stowsh --dot-prefix --dot-rename -t "$dest" "pkg"
     assert_success
 
-    run diff -r --no-dereference "expected-symlink" "$dest"
+    run diff -r --no-dereference "expected-on-both" "$dest"
     assert_success
 
-    run stowsh -D -t "$dest" "pkg-symlink"
+    run stowsh --dot-prefix --dot-rename -D -t "$dest" "pkg"
     assert_success
 
     run diff -r --no-dereference "empty" "$dest"

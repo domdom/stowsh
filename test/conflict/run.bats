@@ -17,15 +17,19 @@ teardown () {
     unset dest
 }
 
-@test "spaces in names" {
-    run stowsh -t "$dest" "pkg space"
-    assert_success
+@test "file exists" {
+    # This file exists in pkg
+    touch "$dest/file"
+
+    run stowsh -t "$dest" "pkg"
+    assert_failure
 
     run diff -r --no-dereference "expected" "$dest"
     assert_success
 
-    run stowsh -D -t "$dest" "pkg space"
-    assert_success
-    run diff -r --no-dereference "empty" "$dest"
+    run stowsh -D -t "$dest" "pkg"
+    assert_failure
+
+    run diff -r --no-dereference "expected" "$dest"
     assert_success
 }

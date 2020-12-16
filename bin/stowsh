@@ -1,14 +1,38 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
-BASEDIR=$(dirname "$0")
+DOTSTOW_USAGE="\
+$0 version 0.0.1
 
-# Do we rename paths that start with dot- to .?
-OPTION_DOT_RENAME=no
+SYNOPSIS:
 
-# Add a . to all top-level items
-OPTION_DOT_PREFIX=no
+    $0 [OPTIONS ...] [-S|-D|-R] PACKAGE ... [-S|-D|-R] PACKAGE ...
 
+OPTIONS:
+
+    -t DIR, --target DIR    Set the directory to stow the package in; for the
+                            packages that follow. The default is the parent of
+                            the current dir.
+
+    -S, --stow              Stow the packages that follow this option.
+    -D, --delete            Unstow the packages that follow this option.
+    -R, --restow            Restow (like -D followed by -S).
+
+    --dot-rename            Enable \"dot-\" prefix preprocessing for packages
+                            that follow. Files and directories that begin with
+                            \"dot-\" get that prefix replaced by a dot (.).
+    --dot-prefix            Enable prefixing with dot (.) for packages that
+                            follow. All top level names in the package get
+                            prefixed with a dot (.).
+
+    -n, --dryrun            Don't actually make any changes, just print.
+
+    --                      Interpret all the remaining arguments as packages.
+"
+
+#####################################################
+# Options
+#####################################################
 # Verbose logging level
 # 0 - quiet - errors only
 # 1 - normal - actions only
@@ -17,7 +41,13 @@ OPTION_DOT_PREFIX=no
 OPTION_VERBOSE_LEVEL=1
 
 # dryrun - print what we are doing, don't actually do anything
-OPTION_DRYRUN=no
+OPTION_DRYRUN="no"
+
+# Do we rename paths that start with dot- to .?
+OPTION_DOT_RENAME="no"
+
+# Add a . to all top-level items
+OPTION_DOT_PREFIX="no"
 
 #####################################################
 # Functional preemble
@@ -105,37 +135,43 @@ list_files () {
     find "$1" -name \* -not -type d -print0 | from_list
 }
 
-get_mapping () {
+if_enabled () {
+    local option=$1
+    shift;
+    if [ "$option" = yes ]; then
+        map "$@"
+    fi
+}
+
+split_paths () {
     # Target directory, but remove trailing slash
     local target=${1%/}
+    # Package directory, but remove trailing slash
+    local package=${2%/}
+    # package_file is the filename that we are going to stow
+    local package_file=${3#"$package/"}
 
-    # Source directory, but remove trailing slash
-    local source=${2%/}
-
-    # source_file is the filename that we are going to stow
-    local source_file=${3#"$source/"}
-    local target_file="/$source_file"
+    # remove leading slashes
+    local target_file=${package_file##/}
 
     if [ "$OPTION_DOT_RENAME" = yes ]; then
+        # Add slash at the start so that the following substitution can match
+        target_file="/$target_file"
         # Replace all occurances of '/dot-' with '/.'
         target_file=${target_file//\/dot-//.}
+        # remove slashes again
+        target_file=${target_file##/}
     fi
 
     if [ "$OPTION_DOT_PREFIX" = yes ]; then
-        # If the target file already starts with a dot, then we shouldn't add
-        # another.
-        target_file=${target_file#/}
+        # Make sure that target doesn't start with dot alread
         if [[ "$target_file" != .* ]]; then
-            target_file="/.$target_file"
+            target_file=".$target_file"
         fi
     fi
 
-    target_file="$target$target_file"
-    source_file="$source/$source_file"
-
-    unmap "$target" "$source" "$target_file" "$source_file"
+    unmap "$target" "$package" "$target_file" "$package_file"
 }
-
 
 #####################################################
 # Checks
@@ -169,14 +205,14 @@ check_rm_dir () {
 # Check that we can create a link
 check_mk_link() {
     local target_file=$1
-    local source_file=$2
+    local package_file=$2
 
     local target_dir=$(dirname "$target_file")
 
-    # If the source_file and target_file are the same, we have nothing to do
-    [ "$target_file" -ef "$source_file" ] && return 0
+    # If the package_file and target_file are the same, we have nothing to do
+    [ "$target_file" -ef "$package_file" ] && return 0
 
-    # If the source_file and target_file are the same, we have nothing to do
+    # If the target_file already exists, we have an error
     [ -f "$target_file" ] && error "mk_link: $target_file already exists"
 
     unmap mk_link "$@"
@@ -185,8 +221,8 @@ check_mk_link() {
 # Check that we can remove a link
 check_rm_link () {
     local target_file=$1
-    local source_file=$2
-    [ "$target_file" -ef "$source_file" ] || error "rm_link: $target_file isn't owned by the package"
+    local package_file=$2
+    [ "$target_file" -ef "$package_file" ] || error "rm_link: $target_file isn't owned by the package"
 
     unmap rm_link "$@"
 }
@@ -198,28 +234,29 @@ check_rm_link () {
 # Action to create directories
 action_mk_dir () {
     local target_file_dir=$2
-    mkdir -p "$target_file_dir"
+
+    [ "$OPTION_DRYRUN" = no ] && mkdir -p "$target_file_dir"
 
     log 1 "[mkdir] $target_file_dir"
 }
 # Action to create the link
 action_mk_link () {
     local target_file=$1
-    local source_file=$2
+    local package_file=$2
 
     local target_dir=$(dirname "$target_file")
-    local relative_source_file=$(relpath "$source_file" "$target_dir")
+    local relative_package_file=$(relpath "$package_file" "$target_dir")
 
-    [[ "$target_file" -ef "$source_file" ]] || ln -s "$relative_source_file" "$target_file"
+    [[ "$target_file" -ef "$package_file" ]] || [ "$OPTION_DRYRUN" = no ] && ln -s "$relative_package_file" "$target_file"
 
-    log 1 "[ln -s] $target_file -> $relative_source_file"
+    log 1 "[ln -s] $target_file -> $relative_package_file"
 }
 # Action to remove symlink
 action_rm_link () {
     local target_file=$1
-    local source_file=$2
+    local package_file=$2
 
-    rm "$target_file"
+    [ "$OPTION_DRYRUN" = no ] && rm "$target_file"
 
     log 1 "[rm ln] $target_file"
 }
@@ -232,7 +269,7 @@ action_rm_dir () {
         if [ ! -d "$target_file_dir" ]; then
             return
         fi
-        rmdir "$target_file_dir" || break
+        [ "$OPTION_DRYRUN" = no ] && rmdir "$target_file_dir" || break
         log 1 "[rmdir] $target_file_dir"
         target_file_dir=$(dirname "$target_file_dir")
     done
@@ -255,45 +292,44 @@ dispatch () {
 #####################################################
 # Transforms
 #####################################################
-# Converts each target -> source pair into a list of actions to perform
+# Converts each target -> package pair into a list of actions to perform
 operation_stow () {
     local target=$1
-    local source=$2
+    local package=$2
     local target_file=$3
-    local source_file=$4
+    local package_file=$4
 
     local target_file_dir=$(dirname "$target_file")
-    unmap mk_dir "$target" "$target_file_dir"
-    unmap mk_link "$target_file" "$source_file"
+    unmap mk_dir "$target" "$target/$target_file_dir"
+    unmap mk_link "$target/$target_file" "$package/$package_file"
 }
 
-# Converts each target -> source pair into a list of actions to perform
+# Converts each target -> package pair into a list of actions to perform
 operation_unstow () {
     local target=$1
-    local source=$2
+    local package=$2
     local target_file=$3
-    local source_file=$4
-    local target_dir=$(dirname "$target_file")
+    local package_file=$4
 
+    local target_file_dir=$(dirname "$target_file")
     # Remove the symbolic link
-    unmap rm_link "$target_file" "$source_file"
+    unmap rm_link "$target/$target_file" "$package/$package_file"
     # Remove the directory, but only if it's empty after this
-    unmap rm_dir "$target" "$target_dir"
+    unmap rm_dir "$target" "$target/$target_file_dir"
 }
 
 ##########################################################
 
 stow () {
-    # The operation to perform. Defaults to "stow"
     local op=$1
-    # Location of the package
-    local source=$2
-    # Stow location. Defaults to 
+    local package=$2
     local target=$3
 
-    list_files "$source" \
-        | map unmap "$target" "$source" \
-        | map get_mapping \
+    debug "[stow] $op $package to $target"
+
+    list_files "$package" \
+        | map unmap "$target" "$package" \
+        | map split_paths \
         | map operation_$op \
         | map dispatch check \
         | sink \
@@ -301,4 +337,73 @@ stow () {
         | map dispatch action
 }
 
-stow "$@"
+emit_operation() {
+    local operation=$1
+    shift;
+    case "$operation" in
+        unstow) unmap stow unstow "$@"; ;;
+        stow)   unmap stow stow   "$@"; ;;
+        restow) unmap stow unstow "$@";
+                unmap stow stow   "$@"; ;;
+    esac
+}
+
+process_arguments() {
+    # The operation to perform
+    local operation="stow"
+
+    # the target directory for the stowed packages
+    local target=".."
+
+    # Process options options at the start. Because these are global options,
+    # they must be set before we process any packages
+    while (( $# )); do
+        case "$1" in
+            -t|--target)  shift; target="$1"; ;;
+
+            -n|--dryrun)  OPTION_DRYRUN=yes; ;;
+
+            --dot-rename) OPTION_DOT_RENAME=yes; ;;
+            --dot-prefix) OPTION_DOT_PREFIX=yes; ;;
+
+            -S|--stow)    operation="stow"; ;;
+            -R|--restow)  operation="restow"; ;;
+            -D|--delete)  operation="unstow"; ;;
+
+            # Once we see something that is not an option, assume it is a package
+            *) break;
+        esac
+        shift;
+    done
+
+    # Interpret package arguments
+    while (( $# )); do
+        case "$1" in
+            -t|--target)  shift; target="$1"; ;;
+            -S|--stow)    operation="stow"; ;;
+            -R|--restow)  operation="restow"; ;;
+            -D|--delete)  operation="unstow"; ;;
+            --) shift; break; ;;
+            *) stow "$operation" "$1" "$target"; ;;
+        esac
+        shift;
+    done
+
+    # Interpret the rest as packages (even ones that look like arguments)
+    while (( $# )); do
+        stow "$operation" "$1" "$target"
+        shift
+    done
+}
+
+
+# The main function, processes arguments
+main () {
+    if (( $# == 0 )); then
+        echo "$DOTSTOW_USAGE"
+        return
+    fi
+    process_arguments "$@"
+}
+
+main "$@"

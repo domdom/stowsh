@@ -17,24 +17,31 @@ teardown () {
     unset dest
 }
 
-@test "multiple packages" {
-    run stowsh -t "$dest" "pkg1"
-    assert_success
-    run diff -r --no-dereference "expected-1" "$dest"
+@test "dot-rename disabled" {
+    run stowsh -t "$dest" "pkg"
     assert_success
 
-    run stowsh -t "$dest" "pkg2"
-    assert_success
-    run diff -r --no-dereference "expected-3" "$dest"
+    run diff -r --no-dereference "expected" "$dest"
     assert_success
 
-    run stowsh -D -t "$dest" "pkg1"
-    assert_success
-    run diff -r --no-dereference "expected-2" "$dest"
+    run stowsh -D -t "$dest" "pkg"
     assert_success
 
-    run stowsh -D -t "$dest" "pkg2"
+    run diff -r --no-dereference "empty" "$dest"
     assert_success
+}
+
+@test "dot-rename enabled" {
+    run stowsh --dot-rename -t "$dest" "pkg"
+    assert_output
+    assert_success
+
+    run diff -r --no-dereference "expected-on" "$dest"
+    assert_success
+
+    run stowsh --dot-rename -D -t "$dest" "pkg"
+    assert_success
+
     run diff -r --no-dereference "empty" "$dest"
     assert_success
 }

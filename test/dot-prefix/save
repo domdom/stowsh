@@ -1,0 +1,7 @@
+dest-3
+├── .file -> ../pkg/file
+├── .file2 -> ../pkg/dot-file2
+└── .folder
+    └── file -> ../../pkg/folder/file
+
+1 directory, 3 files
