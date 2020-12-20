@@ -269,7 +269,7 @@ action_rm_dir () {
         if [ ! -d "$target_file_dir" ]; then
             return
         fi
-        [ "$OPTION_DRYRUN" = no ] && rmdir "$target_file_dir" || break
+        [ "$OPTION_DRYRUN" = no ] && rmdir "$target_file_dir" > /dev/null 2>&1 || break
         log 1 "[rmdir] $target_file_dir"
         target_file_dir=$(dirname "$target_file_dir")
     done
