@@ -325,6 +325,12 @@ stow () {
     local package=$2
     local target=$3
 
+    if [ "$op" = restow ]; then
+        stow unstow "$package" "$target"
+        stow stow "$package" "$target"
+        return
+    fi
+
     debug "[stow] $op $package to $target"
 
     list_files "$package" \
@@ -335,17 +341,6 @@ stow () {
         | sink \
         | map dispatch action \
         | map dispatch action
-}
-
-emit_operation() {
-    local operation=$1
-    shift;
-    case "$operation" in
-        unstow) unmap stow unstow "$@"; ;;
-        stow)   unmap stow stow   "$@"; ;;
-        restow) unmap stow unstow "$@";
-                unmap stow stow   "$@"; ;;
-    esac
 }
 
 process_arguments() {
