@@ -28,7 +28,7 @@ teardown () {
     assert_success
 
     run stowsh -D -t "$dest" "pkg"
-    assert_failure
+    assert_success
 
     run diff -r --no-dereference "expected" "$dest"
     assert_success

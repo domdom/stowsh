@@ -1,0 +1,13 @@
+#!/bin/sh
+# This is almost like readlink, except that it always returns an absolute path
+set -eo pipefail
+
+if [ -L "$1" ]; then
+    file="$(readlink "$1")"
+else
+    file="$1"
+fi
+
+cd "$(dirname "$1")"
+
+echo "$(cd "$(dirname "$file")"; pwd)/$(basename "$file")"

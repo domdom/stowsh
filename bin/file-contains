@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+parent=$1
+file_path=$2
+
+
+file_dir="$(dirname "$file_path")"
+
+while [[ ! "$parent" -ef "$file_dir" ]]; do
+    if [ ! -d "$file_dir" ]; then
+        exit 1
+    fi
+    file_dir=$(dirname "$file_dir")
+done
+
+exit 0
