@@ -222,6 +222,10 @@ check_mk_link() {
 check_rm_link () {
     local target_file=$1
     local package_file=$2
+
+    # There is no file, nothing to do
+    [ ! -f "$target_file" ] && return 0
+
     [ "$target_file" -ef "$package_file" ] || error "rm_link: $target_file isn't owned by the package"
 
     unmap rm_link "$@"
