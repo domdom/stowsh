@@ -97,6 +97,25 @@ relpath () {
     python -c 'import os, sys; print(os.path.relpath(*sys.argv[1:]))' "$1" "$2"
 }
 
+abspath () {
+    echo "$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
+}
+
+# single-level realpath
+absreadlink () {
+    (
+        if [ -L "$1" ]; then
+            local file="$(readlink "$1")"
+        else
+            local file="$1"
+        fi
+
+        cd "$(dirname "$1")"
+
+        echo "$(cd "$(dirname "$file")"; pwd)/$(basename "$file")"
+    )
+}
+
 
 #####################################################
 log () {
@@ -133,44 +152,6 @@ error () {
 
 list_files () {
     find "$1" -name \* -not -type d -print0 | from_list
-}
-
-if_enabled () {
-    local option=$1
-    shift;
-    if [ "$option" = yes ]; then
-        map "$@"
-    fi
-}
-
-split_paths () {
-    # Target directory, but remove trailing slash
-    local target=${1%/}
-    # Package directory, but remove trailing slash
-    local package=${2%/}
-    # package_file is the filename that we are going to stow
-    local package_file=${3#"$package/"}
-
-    # remove leading slashes
-    local target_file=${package_file##/}
-
-    if [ "$OPTION_DOT_RENAME" = yes ]; then
-        # Add slash at the start so that the following substitution can match
-        target_file="/$target_file"
-        # Replace all occurances of '/dot-' with '/.'
-        target_file=${target_file//\/dot-//.}
-        # remove slashes again
-        target_file=${target_file##/}
-    fi
-
-    if [ "$OPTION_DOT_PREFIX" = yes ]; then
-        # Make sure that target doesn't start with dot alread
-        if [[ "$target_file" != .* ]]; then
-            target_file=".$target_file"
-        fi
-    fi
-
-    unmap "$target" "$package" "$target_file" "$package_file"
 }
 
 #####################################################
@@ -316,13 +297,89 @@ operation_unstow () {
     local package_file=$4
 
     local target_file_dir=$(dirname "$target_file")
-    # Remove the symbolic link
-    unmap rm_link "$target/$target_file" "$package/$package_file"
-    # Remove the directory, but only if it's empty after this
-    unmap rm_dir "$target" "$target/$target_file_dir"
+
+    if in_package "$package" "$package_file"; then
+        debug "IS PARENT $package $package_file";
+        # Remove the symbolic link
+        unmap rm_link "$package" "$target/$target_file"
+        # Remove the directory, but only if it's empty after this
+        unmap rm_dir "$target" "$target/$target_file_dir"
+    fi
 }
 
 ##########################################################
+
+split_paths () {
+    # Target directory, but remove trailing slash
+    local target=${1%/}
+    # Package directory, but remove trailing slash
+    local package=${2%/}
+    # package_file is the filename that we are going to stow
+    local package_file=${3#"$package/"}
+
+    # remove leading slashes
+    local target_file=${package_file##/}
+
+    if [ "$OPTION_DOT_RENAME" = yes ]; then
+        # Add slash at the start so that the following substitution can match
+        target_file="/$target_file"
+        # Replace all occurances of '/dot-' with '/.'
+        target_file=${target_file//\/dot-//.}
+        # remove slashes again
+        target_file=${target_file##/}
+    fi
+
+    if [ "$OPTION_DOT_PREFIX" = yes ]; then
+        # Make sure that target doesn't start with dot alread
+        if [[ "$target_file" != .* ]]; then
+            target_file=".$target_file"
+        fi
+    fi
+
+    unmap "$target" "$package" "$target_file" "$package_file"
+}
+
+get_real_path () {
+    # Target directory, but remove trailing slash
+    local target=${1%/}
+    # Package directory, but remove trailing slash
+    local package=${2%/}
+
+    # target_file is the filename that we are going to check the real path of
+    local target_file=${3#"$target/"}
+
+    if [ -L "$target/$target_file" ]; then
+        # Use readlink to unwrap one level of symlink
+        local package_file=$(absreadlink "$target/$target_file")
+        unmap "$target" "$package" "$target_file" "$package_file"
+    fi
+}
+
+in_package () {
+    local package=$1
+
+    local file_path=$(absreadlink "$2")
+    local file_dir=$(dirname "$file_path")
+
+    debug "  package = $package"
+    debug "file_path = $file_path"
+    debug " file_dir = $file_dir"
+
+    while [[ ! "$package" -ef "$file_dir" ]]; do
+        debug "file_dir $file_dir"
+        if [ ! -d "$file_dir" ]; then
+            debug "$file_dir is not a directory"
+            return 1
+        fi
+        if [ "$file_dir" = "/" ]; then
+            return 1
+        fi
+        file_dir=$(dirname "$file_dir")
+    done
+
+    debug "$2 is in $package"
+    return 0
+}
 
 stow () {
     local op=$1
@@ -330,21 +387,35 @@ stow () {
     local target=$3
 
     if [ "$op" = restow ]; then
+        debug "[stow] $op $package to $target"
         stow unstow "$package" "$target"
         stow stow "$package" "$target"
-        return
+    elif [ "$op" = stow ]; then
+        debug "[stow] $op $package to $target"
+
+        list_files "$package" \
+            | map unmap "$target" "$package" \
+            | map split_paths \
+            | map operation_stow \
+            | map dispatch check \
+            | sink \
+            | map dispatch action \
+            | map dispatch action
+    elif [ "$op" = unstow ]; then
+        debug "[stow] $op $package from $target"
+
+        list_files "$target" \
+            | map unmap "$target" "$package" \
+            | map get_real_path \
+            | map display real_path \
+            | map operation_unstow \
+            | map dispatch check \
+            | sink \
+            | map dispatch action \
+            | map dispatch action
+    else
+        error "unknown operation: $op"
     fi
-
-    debug "[stow] $op $package to $target"
-
-    list_files "$package" \
-        | map unmap "$target" "$package" \
-        | map split_paths \
-        | map operation_$op \
-        | map dispatch check \
-        | sink \
-        | map dispatch action \
-        | map dispatch action
 }
 
 process_arguments() {
