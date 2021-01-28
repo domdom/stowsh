@@ -6,4 +6,4 @@ cd $BASEDIR
 
 export PATH=$BASEDIR/../lib/bats-core/bin:$BASEDIR/../bin:$PATH
 
-bats -r . "${@}"
+bats "${@:-r}"

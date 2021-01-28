@@ -71,3 +71,15 @@ teardown () {
     run diff -r --no-dereference "empty" "$dest"
     assert_success
 }
+
+@test "unstow owned stale symbolic link" {
+    # Create a stale symlink
+    ln -s "../pkg/non-existent" "$dest"
+
+    run stowsh -D -t "$dest" "pkg"
+    assert_output ""
+    assert_success
+
+    run diff -r --no-dereference "empty" "$dest"
+    assert_success
+}
