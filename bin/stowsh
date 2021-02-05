@@ -110,7 +110,7 @@ absreadlink () {
             local file="$1"
         fi
 
-        cd "$(dirname "$1")"
+        cd "$(dirname "$1")" || debug "NO DIRECTORY $1"
 
         echo "$(cd "$(dirname "$file")"; pwd)/$(basename "$file")"
     )
@@ -201,13 +201,13 @@ check_mk_link() {
 
 # Check that we can remove a link
 check_rm_link () {
-    local target_file=$1
-    local package_file=$2
+    local package=$1
+    local target_file=$2
 
     # There is no file, nothing to do
     [ ! -f "$target_file" ] && return 0
 
-    [ "$target_file" -ef "$package_file" ] || error "rm_link: $target_file isn't owned by the package"
+    in_package "$package" "$target_file" || error "rm_link: $target_file isn't owned by the package" 
 
     unmap rm_link "$@"
 }
@@ -238,8 +238,8 @@ action_mk_link () {
 }
 # Action to remove symlink
 action_rm_link () {
-    local target_file=$1
-    local package_file=$2
+    local package=$1
+    local target_file=$2
 
     [ "$OPTION_DRYRUN" = no ] && rm "$target_file"
 
@@ -296,11 +296,10 @@ operation_unstow () {
     local target_file=$3
     local package_file=$4
 
-    local target_file_dir=$(dirname "$target_file")
-
-    if in_package "$package" "$package_file"; then
+    if in_package "$package" "$target/$target_file"; then
+        local target_file_dir=$(dirname "$target_file")
         # Remove the symbolic link
-        unmap rm_link "$target/$target_file" "$package_file"
+        unmap rm_link "$target/$target_file" "$package"
         # Remove the directory, but only if it's empty after this
         unmap rm_dir "$target" "$target/$target_file_dir"
     fi
@@ -356,18 +355,13 @@ get_real_path () {
 
 in_package () {
     local package=$1
+    local target_file=$2
 
     local file_path=$(absreadlink "$2")
     local file_dir=$(dirname "$file_path")
 
-    debug "  package = $package"
-    debug "file_path = $file_path"
-    debug " file_dir = $file_dir"
-
     while [[ ! "$package" -ef "$file_dir" ]]; do
-        debug "file_dir $file_dir"
         if [ ! -d "$file_dir" ]; then
-            debug "$file_dir is not a directory"
             return 1
         fi
         if [ "$file_dir" = "/" ]; then
@@ -376,7 +370,6 @@ in_package () {
         file_dir=$(dirname "$file_dir")
     done
 
-    debug "$2 is in $package"
     return 0
 }
 
@@ -403,10 +396,9 @@ stow () {
     elif [ "$op" = unstow ]; then
         debug "[stow] $op $package from $target"
 
-        list_files "$target" \
+        list_files "$package" \
             | map unmap "$target" "$package" \
-            | map get_real_path \
-            | map display real_path \
+            | map split_paths \
             | map operation_unstow \
             | map dispatch check \
             | sink \
